@@ -1,30 +1,28 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, Linking } from 'react-native';
 
 const Task = (props) => {
-
-  const handleLinkPress = () => {
-    if (props.link) {
-      // This opens the URL in the phone's default browser or app
-      Linking.openURL(props.link).catch(err => console.error("Couldn't load page", err));
-    }
-  };
-
   return (
     <View style={styles.item}>
       <View style={styles.itemLeft}>
         <View style={styles.square}></View>
-        <Text style={styles.itemText}>{props.text}</Text>
+        <View style={styles.textContainer}>
+          <Text style={styles.itemText}>{props.text}</Text>
+          {props.link ? (
+            <Text 
+              style={styles.linkText} 
+              onPress={() => Linking.openURL(props.link)}
+            >
+              View Link
+            </Text>
+          ) : null}
+        </View>
       </View>
       
-      {/* Only show the link icon if a link exists */}
-      {props.link ? (
-        <TouchableOpacity onPress={handleLinkPress}>
-          <Text style={styles.linkIcon}>🔗</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.circular}></View>
-      )}
+      {/* Grading Badge */}
+      <View style={[styles.gradeBadge, {backgroundColor: props.gradeColor}]}>
+        <Text style={styles.gradeText}>{props.grade}</Text>
+      </View>
     </View>
   )
 }
@@ -42,7 +40,8 @@ const styles = StyleSheet.create({
   itemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    flex: 1,
   },
   square: {
     width: 24,
@@ -52,20 +51,29 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginRight: 15,
   },
+  textContainer: {
+    flexDirection: 'column',
+  },
   itemText: {
     maxWidth: '80%',
+    fontSize: 16,
   },
-  circular: {
-    width: 12,
-    height: 12,
-    borderColor: '#55BCF6',
-    borderWidth: 2,
+  linkText: {
+    color: '#55BCF6',
+    fontSize: 12,
+    marginTop: 2,
+    textDecorationLine: 'underline',
+  },
+  gradeBadge: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 5,
   },
-  linkIcon: {
-    fontSize: 18,
-    padding: 5,
-  }
+  gradeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
 });
 
 export default Task;

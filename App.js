@@ -1,105 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, SafeAreaView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, {useState} from 'react';
+import { KeyboardAvoidingView, StyleSheet, Text, View, TextInput, TouchableOpacity, Keyboard, ScrollView, Platform } from 'react-native';
+import Task from './components/Task';
 
 export default function App() {
-  const [text, setText] = useState('');
-  const [reminders, setReminders] = useState([]);
+  const [task, setTask] = useState("");
+  const [link, setLink] = useState(""); 
+  const [taskItems, setTaskItems] = useState([]);
 
-  // Load reminders from browser storage when the app opens
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const saved = await AsyncStorage.getItem('@tasks_tracker');
-        if (saved) setReminders(JSON.parse(saved));
-      } catch (e) { console.log("Error loading data"); }
-    };
-    loadData();
-  }, []);
+  const handleAddTask = () => {
+    if (!task || task.trim() === "") return; 
+    Keyboard.dismiss();
+    
+    // Initialize task with an empty array for completion dates
+    setTaskItems([...taskItems, { 
+      text: task, 
+      link: link, 
+      completedDates: [] 
+    }]);
 
-  // Save a new reminder
-  const addReminder = async () => {
-    if (text.trim().length === 0) return;
-    const updated = [...reminders, { id: Date.now().toString(), title: text }];
-    setReminders(updated);
-    await AsyncStorage.setItem('@tasks_tracker', JSON.stringify(updated));
-    setText('');
-  };
+    // Clearing inputs completely
+    setTask("");
+    setLink(""); 
+  }
 
-  // Delete a reminder
-  const removeReminder = async (id) => {
-    const updated = reminders.filter(item => item.id !== id);
-    setReminders(updated);
-    await AsyncStorage.setItem('@tasks_tracker', JSON.stringify(updated));
+  const completeTask = (index) => {
+    let itemsCopy = [...taskItems];
+    const now = new Date().toISOString();
+    
+    // Add the current timestamp to this specific task
+    itemsCopy[index].completedDates.push(now);
+    setTaskItems(itemsCopy);
+    
+    // Optional: If you want to remove it after clicking, use itemsCopy.splice(index, 1);
+    // But for grading, we usually keep them or move them to a 'Done' list!
+  }
+
+  const getGrade = (dates) => {
+    const now = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    
+    const weeklyCount = dates.filter(d => new Date(d) > sevenDaysAgo).length;
+
+    if (weeklyCount >= 7) return { label: 'A+ Expert', color: '#4CAF50' };
+    if (weeklyCount >= 5) return { label: 'B Steady', color: '#8BC34A' };
+    if (weeklyCount >= 3) return { label: 'C Getting There', color: '#FFC107' };
+    if (weeklyCount >= 1) return { label: 'D Beginner', color: '#FF9800' };
+    return { label: 'New', color: '#9E9E9E' };
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.innerContainer}>
-        <Text style={styles.header}>Daily Reminders</Text>
-        
-        <View style={styles.inputArea}>
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps='handled'
+      >
+      <View style={styles.tasksWrapper}>
+        <Text style={styles.sectionTitle}>Weekly Progress</Text>
+        <View style={styles.items}>
+          {
+            taskItems.map((item, index) => {
+              const gradeInfo = getGrade(item.completedDates);
+              return (
+                <TouchableOpacity key={index} onPress={() => completeTask(index)}>
+                  <Task 
+                    text={item.text} 
+                    link={item.link} 
+                    grade={gradeInfo.label}
+                    gradeColor={gradeInfo.color}
+                  /> 
+                </TouchableOpacity>
+              )
+            })
+          }
+        </View>
+      </View>
+      </ScrollView>
+
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.writeTaskWrapper}
+      >
+        <View style={styles.inputGroup}>
           <TextInput 
             style={styles.input} 
-            placeholder="What needs to be done?" 
-            value={text} 
-            onChangeText={setText} 
+            placeholder={'Write a task'} 
+            value={task} 
+            onChangeText={text => setTask(text)} 
           />
-          <TouchableOpacity style={styles.button} onPress={addReminder}>
-            <Text style={styles.buttonText}>Add</Text>
-          </TouchableOpacity>
+          <TextInput 
+            style={[styles.input, styles.linkInput]} 
+            placeholder={'Paste link (YouTube, IG, etc.)'} 
+            value={link} 
+            onChangeText={text => setLink(text)} 
+          />
         </View>
-
-        <FlatList
-          data={reminders}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.item}>
-              <Text style={styles.itemText}>{item.title}</Text>
-              <TouchableOpacity onPress={() => removeReminder(item.id)}>
-                <Text style={styles.deleteText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        />
-      </View>
-    </SafeAreaView>
+        <TouchableOpacity onPress={() => handleAddTask()}>
+          <View style={styles.addWrapper}>
+            <Text style={styles.addText}>+</Text>
+          </View>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  innerContainer: { padding: 30, flex: 1 },
-  header: { fontSize: 32, fontWeight: 'bold', marginBottom: 20, color: '#333' },
-  inputArea: { flexDirection: 'row', marginBottom: 20 },
-  input: { 
-    flex: 1, 
-    backgroundColor: '#fff', 
-    padding: 15, 
-    borderRadius: 10, 
-    marginRight: 10,
+  container: { flex: 1, backgroundColor: '#E8EAED' },
+  tasksWrapper: { paddingTop: 80, paddingHorizontal: 20 },
+  sectionTitle: { fontSize: 24, fontWeight: 'bold' },
+  items: { marginTop: 30 },
+  writeTaskWrapper: {
+    position: 'absolute',
+    bottom: 60,
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  inputGroup: { flex: 1, marginRight: 20 },
+  input: {
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    backgroundColor: '#FFF',
+    borderRadius: 60,
+    borderColor: '#C0C0C0',
     borderWidth: 1,
-    borderColor: '#ddd'
+    width: '100%',
   },
-  button: { 
-    backgroundColor: '#007AFF', 
-    paddingHorizontal: 20, 
-    justifyContent: 'center', 
-    borderRadius: 10 
+  linkInput: { marginTop: 10, fontSize: 12, borderColor: '#55BCF6' },
+  addWrapper: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#FFF',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#C0C0C0',
+    borderWidth: 1,
   },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-  item: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    padding: 20, 
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    elevation: 2
-  },
-  itemText: { fontSize: 18, color: '#444' },
-  deleteText: { color: '#FF3B30', fontSize: 20, fontWeight: 'bold' }
+  addText: { fontSize: 30 },
 });
