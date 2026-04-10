@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KeyboardAvoidingView, StyleSheet, Text, View, TextInput, TouchableOpacity, Keyboard, ScrollView, Platform, Dimensions } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, Text, View, TextInput, TouchableOpacity, Keyboard, ScrollView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Task from './components/Task';
 
@@ -9,12 +9,16 @@ export default function App() {
   const [timeTag, setTimeTag] = useState("Morning"); 
   const [taskItems, setTaskItems] = useState([]);
 
+  // Load data on startup
   useEffect(() => { loadTasks(); }, []);
+
+  // Save data whenever list changes
   useEffect(() => { saveTasks(taskItems); }, [taskItems]);
 
   const saveTasks = async (tasks) => {
-    try { await AsyncStorage.setItem('@task_list', JSON.stringify(tasks)); } 
-    catch (e) { console.log("Error saving", e); }
+    try {
+      await AsyncStorage.setItem('@task_list', JSON.stringify(tasks));
+    } catch (e) { console.log("Error saving", e); }
   };
 
   const loadTasks = async () => {
@@ -26,9 +30,18 @@ export default function App() {
 
   const handleAddTask = () => {
     if (!task || task.trim() === "") return; 
-    setTaskItems([...taskItems, { text: task, link: link, time: timeTag, completedDates: [] }]);
-    setTask(""); setLink(""); setTimeTag("Morning");
     Keyboard.dismiss();
+    
+    setTaskItems([...taskItems, { 
+      text: task, 
+      link: link, 
+      time: timeTag,
+      completedDates: [] 
+    }]);
+
+    setTask("");
+    setLink("");
+    setTimeTag("Morning"); 
   };
 
   const completeTask = (index) => {
@@ -43,11 +56,23 @@ export default function App() {
     setTaskItems(itemsCopy);
   };
 
+  const moveTask = (index, direction) => {
+    const newTasks = [...taskItems];
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= newTasks.length) return;
+
+    const temp = newTasks[index];
+    newTasks[index] = newTasks[nextIndex];
+    newTasks[nextIndex] = temp;
+    setTaskItems(newTasks);
+  };
+
   const getGrade = (dates) => {
     const now = new Date();
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(now.getDate() - 7);
-    const weeklyCount = dates.filter(d => new Date(d) > sevenDaysAgo).length;
+    const weeklyCount = (dates || []).filter(d => new Date(d) > sevenDaysAgo).length;
+
     if (weeklyCount >= 7) return { label: 'A+ Expert', color: '#4CAF50' };
     if (weeklyCount >= 5) return { label: 'B Steady', color: '#8BC34A' };
     if (weeklyCount >= 3) return { label: 'C Getting There', color: '#FFC107' };
@@ -66,9 +91,9 @@ export default function App() {
           <Text style={styles.sectionTitle}>Weekly Progress</Text>
           <View style={styles.items}>
             {taskItems.map((item, index) => {
-              const gradeInfo = getGrade(item.completedDates || []);
+              const gradeInfo = getGrade(item.completedDates);
               return (
-                <TouchableOpacity key={index} onPress={() => completeTask(index)}>
+                <View key={index}>
                   <Task 
                     text={item.text} 
                     link={item.link} 
@@ -76,8 +101,13 @@ export default function App() {
                     grade={gradeInfo.label}
                     gradeColor={gradeInfo.color}
                     onDelete={() => deleteTask(index)}
+                    onComplete={() => completeTask(index)}
+                    onMoveUp={() => moveTask(index, 'up')}
+                    onMoveDown={() => moveTask(index, 'down')}
+                    isFirst={index === 0}
+                    isLast={index === taskItems.length - 1}
                   /> 
-                </TouchableOpacity>
+                </View>
               )
             })}
           </View>
@@ -117,7 +147,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F6FA' },
-  scrollContainer: { flexGrow: 1, paddingBottom: 200 },
+  scrollContainer: { flexGrow: 1, paddingBottom: 220 },
   tasksWrapper: { paddingTop: 60, paddingHorizontal: 20 },
   sectionTitle: { fontSize: 28, fontWeight: 'bold', color: '#2F3542' },
   items: { marginTop: 30 },
@@ -133,7 +163,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#DDD'
   },
   inputContainer: { width: '100%' },
-  tagRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  tagRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   tagButton: { flex: 1, marginHorizontal: 4, paddingVertical: 8, borderRadius: 12, backgroundColor: '#FFF', alignItems: 'center', borderWidth: 1, borderColor: '#CED4DA' },
   activeTag: { backgroundColor: '#55BCF6', borderColor: '#55BCF6' },
   tagText: { fontSize: 12, color: '#57606F' },
@@ -142,6 +172,6 @@ const styles = StyleSheet.create({
   inputGroup: { flex: 1, marginRight: 15 },
   input: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CED4DA', marginBottom: 8, fontSize: 16 },
   linkInput: { fontSize: 13, color: '#55BCF6' },
-  addWrapper: { width: 56, height: 100, backgroundColor: '#55BCF6', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  addWrapper: { width: 56, height: 102, backgroundColor: '#55BCF6', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   addText: { color: '#FFF', fontSize: 32, fontWeight: '300' },
 });
