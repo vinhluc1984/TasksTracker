@@ -46,6 +46,10 @@ export default function App() {
 
   const completeTask = (index) => {
     let itemsCopy = [...taskItems];
+    // Ensure completedDates exists as an array
+    if (!itemsCopy[index].completedDates) {
+      itemsCopy[index].completedDates = [];
+    }
     itemsCopy[index].completedDates.push(new Date().toISOString());
     setTaskItems(itemsCopy);
   };
@@ -68,10 +72,20 @@ export default function App() {
   };
 
   const getGrade = (dates) => {
+    if (!dates || dates.length === 0) return { label: 'New', color: '#9E9E9E' };
+
     const now = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    const weeklyCount = (dates || []).filter(d => new Date(d) > sevenDaysAgo).length;
+    
+    // Calculate the start of the current week (Monday)
+    const startOfWeek = new Date(now);
+    const day = now.getDay(); // 0 is Sunday, 1 is Monday
+    // If it's Sunday (0), we go back 6 days. Otherwise, go back to Monday (1).
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1); 
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0); 
+
+    // Count completions since Monday 12:00 AM
+    const weeklyCount = dates.filter(d => new Date(d) >= startOfWeek).length;
 
     if (weeklyCount >= 7) return { label: 'A+ Expert', color: '#4CAF50' };
     if (weeklyCount >= 5) return { label: 'B Steady', color: '#8BC34A' };
