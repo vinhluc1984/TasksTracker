@@ -5,7 +5,8 @@ import Task from './components/Task';
 
 export default function App() {
   const [currentView, setCurrentView] = useState("tasks"); // "tasks" or "recipes"
-  
+  const [showDeadlineBanner, setShowDeadlineBanner] = useState(false);
+
   // Task States
   const [task, setTask] = useState("");
   const [link, setLink] = useState(""); 
@@ -17,8 +18,45 @@ export default function App() {
   const [recipeDetails, setRecipeDetails] = useState("");
   const [recipeItems, setRecipeItems] = useState([]);
 
-  useEffect(() => { loadData(); }, []);
-  useEffect(() => { saveData(); }, [taskItems, recipeItems]);
+  // --- ONESIGNAL PWA INITIALIZATION ---
+  useEffect(() => {
+    // 1. Inject OneSignal Script
+    const script = document.createElement('script');
+    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+    script.defer = true;
+    document.head.appendChild(script);
+
+    // 2. Initialize OneSignal
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(function(OneSignal) {
+      OneSignal.init({
+        appId: "4250ca5b-104e-4633-880e-2177df62cc84", // IMPORTANT: Put your App ID here
+        allowLocalhostAsSecureOrigin: true,
+      });
+    });
+  }, []);
+
+  const handleNotificationOptIn = () => {
+    if (window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(function(OneSignal) {
+        OneSignal.showNativePrompt();
+      });
+    } else {
+      alert("Notification system loading...");
+    }
+  };
+  // ------------------------------------
+
+  // Load data on startup
+  useEffect(() => { 
+    loadData(); 
+  }, []);
+
+  // Save data whenever lists change
+  useEffect(() => { 
+    saveData(); 
+    checkDeadline();
+  }, [taskItems, recipeItems]);
 
   const saveData = async () => {
     try {
@@ -36,6 +74,21 @@ export default function App() {
     } catch (e) { console.log("Error loading", e); }
   };
 
+  const checkDeadline = () => {
+    const now = new Date();
+    if (now.getHours() >= 20) { // 8:00 PM
+      const hasUnfinished = taskItems.some(item => {
+        const lastCompletion = item.completedDates?.length > 0 
+          ? new Date(item.completedDates[item.completedDates.length - 1]) 
+          : null;
+        return !lastCompletion || lastCompletion.toDateString() !== now.toDateString();
+      });
+      setShowDeadlineBanner(hasUnfinished);
+    } else {
+      setShowDeadlineBanner(false);
+    }
+  };
+
   const handleAddEntry = () => {
     Keyboard.dismiss();
     if (currentView === "tasks") {
@@ -50,24 +103,8 @@ export default function App() {
   };
 
   const deleteItem = (index) => {
-    if (currentView === "tasks") {
-      let copy = [...taskItems];
-      copy.splice(index, 1);
-      setTaskItems(copy);
-    } else {
-      let copy = [...recipeItems];
-      copy.splice(index, 1);
-      setRecipeItems(copy);
-    }
-  };
-
-  const moveItem = (index, direction) => {
     const list = currentView === "tasks" ? [...taskItems] : [...recipeItems];
-    const nextIndex = direction === 'up' ? index - 1 : index + 1;
-    if (nextIndex < 0 || nextIndex >= list.length) return;
-    const temp = list[index];
-    list[index] = list[nextIndex];
-    list[nextIndex] = temp;
+    list.splice(index, 1);
     currentView === "tasks" ? setTaskItems(list) : setRecipeItems(list);
   };
 
@@ -90,30 +127,35 @@ export default function App() {
     if (weeklyCount >= 7) return { label: 'A+ Expert', color: '#4CAF50' };
     if (weeklyCount >= 5) return { label: 'B Steady', color: '#8BC34A' };
     if (weeklyCount >= 3) return { label: 'C Getting There', color: '#FFC107' };
-    if (weeklyCount >= 1) return { label: 'D Beginner', color: '#FF9800' };
-    return { label: 'New', color: '#9E9E9E' };
+    return { label: 'D Beginner', color: '#FF9800' };
   };
 
   return (
     <View style={styles.container}>
+      {showDeadlineBanner && currentView === "tasks" && (
+        <View style={styles.deadlineBanner}>
+          <Text style={styles.deadlineText}>⚠️ 8PM DEADLINE: Finish your tasks!</Text>
+        </View>
+      )}
+
       <View style={styles.header}>
         <View style={styles.tabWrapper}>
-          <TouchableOpacity 
-            style={[styles.tab, currentView === "tasks" && styles.activeTab]} 
-            onPress={() => setCurrentView("tasks")}
-          >
+          <TouchableOpacity style={[styles.tab, currentView === "tasks" && styles.activeTab]} onPress={() => setCurrentView("tasks")}>
             <Text style={[styles.tabText, currentView === "tasks" && styles.activeTabText]}>Tasks</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, currentView === "recipes" && styles.activeTab]} 
-            onPress={() => setCurrentView("recipes")}
-          >
+          <TouchableOpacity style={[styles.tab, currentView === "recipes" && styles.activeTab]} onPress={() => setCurrentView("recipes")}>
             <Text style={[styles.tabText, currentView === "recipes" && styles.activeTabText]}>Recipes</Text>
           </TouchableOpacity>
         </View>
+
+        {currentView === "tasks" && (
+          <TouchableOpacity onPress={handleNotificationOptIn} style={styles.bellBtn}>
+            <Text style={styles.bellText}>🔔 Tap to Enable 8PM Phone Alerts</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled' showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled'>
         <View style={styles.tasksWrapper}>
           <Text style={styles.sectionTitle}>{currentView === "tasks" ? "Weekly Progress" : "My Cookbook"}</Text>
           <View style={styles.items}>
@@ -129,25 +171,11 @@ export default function App() {
                   gradeColor={getGrade(item.completedDates).color}
                   onDelete={() => deleteItem(index)}
                   onComplete={() => completeTask(index)}
-                  onMoveUp={() => moveItem(index, 'up')}
-                  onMoveDown={() => moveItem(index, 'down')}
-                  isFirst={index === 0}
-                  isLast={index === taskItems.length - 1}
                 />
               ))
             ) : (
               recipeItems.map((item, index) => (
-                <Task 
-                  key={index}
-                  type="recipe"
-                  text={item.name} 
-                  link={item.details} 
-                  onDelete={() => deleteItem(index)}
-                  onMoveUp={() => moveItem(index, 'up')}
-                  onMoveDown={() => moveItem(index, 'down')}
-                  isFirst={index === 0}
-                  isLast={index === recipeItems.length - 1}
-                />
+                <Task key={index} type="recipe" text={item.name} link={item.details} onDelete={() => deleteItem(index)} />
               ))
             )}
           </View>
@@ -167,19 +195,8 @@ export default function App() {
           )}
           <View style={styles.actionRow}>
             <View style={styles.inputGroup}>
-              <TextInput 
-                style={styles.input} 
-                placeholder={currentView === "tasks" ? 'Task Name' : 'Recipe Name'} 
-                value={currentView === "tasks" ? task : recipeName} 
-                onChangeText={currentView === "tasks" ? setTask : setRecipeName} 
-              />
-              <TextInput 
-                style={[styles.input, styles.linkInput]} 
-                placeholder={currentView === "tasks" ? 'Link' : 'Link or Ingredients...'} 
-                value={currentView === "tasks" ? link : recipeDetails} 
-                onChangeText={currentView === "tasks" ? setLink : setRecipeDetails}
-                multiline={currentView === "recipes"}
-              />
+              <TextInput style={styles.input} placeholder={currentView === "tasks" ? 'Task Name' : 'Recipe Name'} value={currentView === "tasks" ? task : recipeName} onChangeText={currentView === "tasks" ? setTask : setRecipeName} />
+              <TextInput style={[styles.input, styles.linkInput]} placeholder={currentView === "tasks" ? 'Link' : 'Details/Ingredients'} value={currentView === "tasks" ? link : recipeDetails} onChangeText={currentView === "tasks" ? setLink : setRecipeDetails} multiline={currentView === "recipes"} />
             </View>
             <TouchableOpacity onPress={handleAddEntry}>
               <View style={styles.addWrapper}><Text style={styles.addText}>+</Text></View>
@@ -193,12 +210,16 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F6FA' },
-  header: { paddingTop: 50, backgroundColor: '#FFF', paddingBottom: 10, shadowColor: "#000", shadowOpacity: 0.1, elevation: 5 },
+  deadlineBanner: { backgroundColor: '#FF4757', padding: 12, alignItems: 'center', position: 'absolute', top: 0, width: '100%', zIndex: 10, paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  deadlineText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  header: { paddingTop: Platform.OS === 'ios' ? 50 : 20, backgroundColor: '#FFF', paddingBottom: 15, shadowOpacity: 0.1, elevation: 5 },
   tabWrapper: { flexDirection: 'row', justifyContent: 'center', marginHorizontal: 20, backgroundColor: '#F1F2F6', borderRadius: 12, padding: 4 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
   activeTab: { backgroundColor: '#FFF' },
   tabText: { fontSize: 14, color: '#747D8C', fontWeight: '600' },
   activeTabText: { color: '#55BCF6' },
+  bellBtn: { marginTop: 10, alignSelf: 'center', backgroundColor: '#E1F5FE', paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20 },
+  bellText: { color: '#0288D1', fontSize: 11, fontWeight: 'bold' },
   scrollContainer: { flexGrow: 1, paddingBottom: 220 },
   tasksWrapper: { paddingTop: 20, paddingHorizontal: 20 },
   sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#2F3542' },
