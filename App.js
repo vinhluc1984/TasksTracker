@@ -20,17 +20,15 @@ export default function App() {
 
   // --- ONESIGNAL PWA INITIALIZATION ---
   useEffect(() => {
-    // 1. Inject OneSignal Script
     const script = document.createElement('script');
     script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
     script.defer = true;
     document.head.appendChild(script);
 
-    // 2. Initialize OneSignal
     window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(function(OneSignal) {
-      OneSignal.init({
-        appId: "4250ca5b-104e-4633-880e-2177df62cc84", // IMPORTANT: Put your App ID here
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "4250ca5b-104e-4633-880e-2177df62cc84",
         allowLocalhostAsSecureOrigin: true,
       });
     });
@@ -45,18 +43,10 @@ export default function App() {
       alert("Notification system loading...");
     }
   };
-  // ------------------------------------
 
-  // Load data on startup
-  useEffect(() => { 
-    loadData(); 
-  }, []);
-
-  // Save data whenever lists change
-  useEffect(() => { 
-    saveData(); 
-    checkDeadline();
-  }, [taskItems, recipeItems]);
+  // Load/Save Data
+  useEffect(() => { loadData(); }, []);
+  useEffect(() => { saveData(); checkDeadline(); }, [taskItems, recipeItems]);
 
   const saveData = async () => {
     try {
@@ -76,7 +66,7 @@ export default function App() {
 
   const checkDeadline = () => {
     const now = new Date();
-    if (now.getHours() >= 20) { // 8:00 PM
+    if (now.getHours() >= 20) {
       const hasUnfinished = taskItems.some(item => {
         const lastCompletion = item.completedDates?.length > 0 
           ? new Date(item.completedDates[item.completedDates.length - 1]) 
@@ -158,21 +148,37 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled'>
         <View style={styles.tasksWrapper}>
           <Text style={styles.sectionTitle}>{currentView === "tasks" ? "Weekly Progress" : "My Cookbook"}</Text>
+          
           <View style={styles.items}>
             {currentView === "tasks" ? (
-              taskItems.map((item, index) => (
-                <Task 
-                  key={index}
-                  type="task"
-                  text={item.text} 
-                  link={item.link} 
-                  time={item.time}
-                  grade={getGrade(item.completedDates).label}
-                  gradeColor={getGrade(item.completedDates).color}
-                  onDelete={() => deleteItem(index)}
-                  onComplete={() => completeTask(index)}
-                />
-              ))
+              // --- START GROUPING LOGIC ---
+              ['Morning', 'Afternoon', 'Evening'].map((timeGroup) => {
+                const filteredTasks = taskItems.filter(item => item.time === timeGroup);
+                if (filteredTasks.length === 0) return null;
+
+                return (
+                  <View key={timeGroup} style={{ marginBottom: 25 }}>
+                    <Text style={styles.groupHeading}>{timeGroup}</Text>
+                    {filteredTasks.map((item) => {
+                      const originalIndex = taskItems.findIndex(t => t === item);
+                      return (
+                        <Task 
+                          key={originalIndex}
+                          type="task"
+                          text={item.text} 
+                          link={item.link} 
+                          time={item.time}
+                          grade={getGrade(item.completedDates).label}
+                          gradeColor={getGrade(item.completedDates).color}
+                          onDelete={() => deleteItem(originalIndex)}
+                          onComplete={() => completeTask(originalIndex)}
+                        />
+                      );
+                    })}
+                  </View>
+                );
+              })
+              // --- END GROUPING LOGIC ---
             ) : (
               recipeItems.map((item, index) => (
                 <Task key={index} type="recipe" text={item.name} link={item.details} onDelete={() => deleteItem(index)} />
@@ -222,8 +228,9 @@ const styles = StyleSheet.create({
   bellText: { color: '#0288D1', fontSize: 11, fontWeight: 'bold' },
   scrollContainer: { flexGrow: 1, paddingBottom: 220 },
   tasksWrapper: { paddingTop: 20, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#2F3542' },
-  items: { marginTop: 20 },
+  sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#2F3542', marginBottom: 10 },
+  groupHeading: { fontSize: 12, fontWeight: 'bold', color: '#55BCF6', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1.5 },
+  items: { marginTop: 10 },
   writeTaskWrapper: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#F5F6FA', paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#DDD' },
   inputContainer: { width: '100%' },
   tagRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
